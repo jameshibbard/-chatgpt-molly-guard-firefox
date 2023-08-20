@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "ChatGPT Molly-guard",
+  "author": "James Hibbard",
+  "version": "1.0",
+  "description": "Disables input submission if specific words are detected in the chat box.",
+  "content_scripts": [
+    {
+      "matches": ["https://chat.openai.com/*"],
+      "css": ["styles.css"],
+      "js": ["wordsList.js", "contentScript.js"]
+    }
+  ]
+}
