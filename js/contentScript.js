@@ -1,15 +1,19 @@
+/* global document browser window */
+
+let forbiddenWords = [];
+
 const debounce = (callback, wait) => {
   let timeoutId = null;
   return (...args) => {
     window.clearTimeout(timeoutId);
     timeoutId = window.setTimeout(() => {
-      callback.apply(null, args);
+      callback(...args);
     }, wait);
   };
-}
+};
 
 function containsForbiddenWords(value) {
-  return forbiddenWords.some(word => value.toLowerCase().includes(word.toLowerCase()));
+  return forbiddenWords.some((word) => value.toLowerCase().includes(word.toLowerCase()));
 }
 
 function updateUI(target) {
@@ -26,6 +30,12 @@ function updateUI(target) {
   }
 }
 
+function updateForbiddenWords() {
+  browser.storage.local.get('words', (data) => {
+    forbiddenWords = data.words || [];
+  });
+}
+
 document.body.addEventListener('keyup', debounce((event) => {
   if (event.target.id === 'prompt-textarea') updateUI(event.target);
 }, 300));
@@ -38,3 +48,12 @@ document.addEventListener('keydown', (e) => {
     }
   }
 }, true);
+
+browser.runtime.onMessage.addListener((message) => {
+  if (message.command === 'updateWords') {
+    updateForbiddenWords();
+  }
+});
+
+// On load
+updateForbiddenWords();

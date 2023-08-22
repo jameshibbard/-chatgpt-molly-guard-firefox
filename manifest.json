@@ -4,11 +4,28 @@
   "author": "James Hibbard",
   "version": "1.0",
   "description": "Disables input submission if specific words are detected in the chat box.",
+  "action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "96": "icons/icon-96.png"
+    }
+  },
+  "icons": {
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
+  "permissions": ["tabs", "storage"],
+  "background": {
+    "scripts": ["js/background.js"]
+  },
   "content_scripts": [
     {
       "matches": ["https://chat.openai.com/*"],
-      "css": ["styles.css"],
-      "js": ["wordsList.js", "contentScript.js"]
+      "css": ["css/styles.css"],
+      "js": ["js/contentScript.js"]
     }
   ]
 }
