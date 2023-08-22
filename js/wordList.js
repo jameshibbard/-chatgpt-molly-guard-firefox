@@ -10,7 +10,8 @@ browser.storage.local.get('words').then((data) => {
 });
 
 saveBtn.addEventListener('click', () => {
-  const words = wordListTextArea.value.split('\n');
+  const rows = wordListTextArea.value.split('\n');
+  const words = rows.filter((item) => item !== '');
   browser.storage.local.set({ words });
   browser.runtime.sendMessage({ command: 'updateWords' });
   window.alert('Words saved!');
