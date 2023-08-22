@@ -36,10 +36,12 @@ function updateForbiddenWords() {
   });
 }
 
-document.body.addEventListener('keyup', debounce((event) => {
+// Catch both keypresses & paste with mouse
+document.body.addEventListener('input', debounce((event) => {
   if (event.target.id === 'prompt-textarea') updateUI(event.target);
 }, 300));
 
+// Catch submission via 'Enter'
 document.addEventListener('keydown', (e) => {
   if (e.target.id === 'prompt-textarea' && e.key === 'Enter') {
     if (containsForbiddenWords(e.target.value)) {
