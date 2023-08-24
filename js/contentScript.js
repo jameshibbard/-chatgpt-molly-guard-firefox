@@ -1,10 +1,15 @@
 /* global document browser window MutationObserver Node */
 
-let forbiddenWords = [];
-let mollyguardActive = false;
-let overrideActive = false;
+const config = {
+  forbiddenWords: [],
+  mollyguardActive: false,
+  overrideActive: false,
+  thisKeypressTime: 0,
+  lastKeypressTime: 0,
+  delay: 350,
+};
 
-const debounce = (callback, wait) => {
+function debounce(callback, wait) {
   let timeoutId = null;
   return (...args) => {
     window.clearTimeout(timeoutId);
@@ -12,56 +17,114 @@ const debounce = (callback, wait) => {
       callback(...args);
     }, wait);
   };
-};
-
-function containsForbiddenWords(value) {
-  return forbiddenWords.some((word) => value.toLowerCase().includes(word.toLowerCase()));
 }
 
-function updateUI(target) {
-  if (overrideActive) return;
+function containsForbiddenWords(value) {
+  return config.forbiddenWords.some((word) => value.toLowerCase().includes(word));
+}
+
+function updateForbiddenWords() {
+  browser.storage.local.get('words', ({ words }) => {
+    if (words === undefined) return;
+
+    config.forbiddenWords = words;
+  });
+}
+
+function updateMollyGuard(target) {
+  if (config.overrideActive) return;
 
   const containsForbiddenWord = containsForbiddenWords(target.value);
   const sendButton = target.nextElementSibling;
   const parentDiv = target.parentElement;
 
-  if (parentDiv.classList.contains('overridden')) parentDiv.classList.remove('overridden');
-
   if (containsForbiddenWord) {
     sendButton.disabled = true;
     parentDiv.classList.add('forbidden-div');
-    mollyguardActive = true;
+    config.mollyguardActive = true;
   } else {
     sendButton.disabled = false;
     parentDiv.classList.remove('forbidden-div');
-    mollyguardActive = false;
+    config.mollyguardActive = false;
   }
 }
 
-// Run check after updating
-function updateForbiddenWords() {
-  browser.storage.local.get('words', (data) => {
-    forbiddenWords = data.words || [];
-  });
+function updateOverride({ command }) {
+  const textArea = document.getElementById('prompt-textarea');
+  const parentDiv = textArea.parentElement;
+  const sendButton = textArea.nextElementSibling;
+
+  if (command === 'ENABLE') {
+    sendButton.disabled = false;
+    parentDiv.classList.remove('forbidden-div');
+    parentDiv.classList.add('overridden');
+    config.mollyguardActive = false;
+    config.overrideActive = true;
+  }
+
+  if (command === 'DISABLE') {
+    parentDiv.classList.remove('overridden');
+    config.overrideActive = false;
+  }
 }
 
-// Catch both keypresses & paste with mouse
-document.body.addEventListener('input', debounce((e) => {
-  if (e.target.id === 'prompt-textarea') updateUI(e.target);
-}, 300));
-
-// Catch submission via 'Enter'
-document.addEventListener('keydown', (e) => {
-  if (overrideActive) return;
-
-  if (e.target.id === 'prompt-textarea' && e.key === 'Enter') {
-    if (containsForbiddenWords(e.target.value)) {
-      e.stopPropagation();
-      e.preventDefault();
+// Detect new DIV elements being insterted into the DOM
+const observer = new MutationObserver((mutationsList) => {
+  mutationsList.forEach((mutation) => {
+    if (mutation.type === 'childList') {
+      mutation.addedNodes.forEach((addedNode) => {
+        if (addedNode.nodeType === Node.ELEMENT_NODE && addedNode.tagName === 'DIV') {
+          // DIVs inserted. Chat has continued
+          updateOverride({ command: 'DISABLE' });
+          observer.disconnect();
+        }
+      });
     }
+  });
+});
+
+function handleEnterPress(e) {
+  if (containsForbiddenWords(e.target.value)) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+}
+
+function handleEscapePress() {
+  if (!config.mollyguardActive) return;
+
+  config.thisKeypressTime = new Date();
+
+  if (config.thisKeypressTime - config.lastKeypressTime <= config.delay) {
+    config.thisKeypressTime = 0;
+
+    // Escape has been double-pressed
+    updateOverride({ command: 'ENABLE' });
+    observer.observe(document, { childList: true, subtree: true });
+  }
+
+  config.lastKeypressTime = config.thisKeypressTime;
+}
+
+// Event listeners
+document.addEventListener('keydown', (e) => {
+  if (config.overrideActive) return;
+
+  if (e.key === 'Enter' && e.target.id === 'prompt-textarea') {
+    handleEnterPress(e);
+  } else if (e.key === 'Escape') {
+    handleEscapePress();
   }
 }, true);
 
+// Catch both keypress & paste with mouse
+document.body.addEventListener('input', debounce((e) => {
+  if (e.target.id === 'prompt-textarea') {
+    updateMollyGuard(e.target);
+  }
+}, config.delay));
+
+// Listen for words being updated
 browser.runtime.onMessage.addListener((message) => {
   if (message.command === 'updateWords') {
     updateForbiddenWords();
@@ -70,52 +133,3 @@ browser.runtime.onMessage.addListener((message) => {
 
 // On load
 updateForbiddenWords();
-
-// Molly-guard can be overridden by double pressing 'Escape'
-// The most effective way of reenabling it is to listen for divs being inserted into the DOM
-// This indicates that the chat has continued
-let lastEscapePressTime = 0;
-const targetNode = document;
-const config = { childList: true, subtree: true };
-
-const observer = new MutationObserver((mutationsList) => {
-  mutationsList.forEach((mutation) => {
-    if (mutation.type === 'childList') {
-      mutation.addedNodes.forEach((addedNode) => {
-        if (addedNode.nodeType === Node.ELEMENT_NODE && addedNode.tagName === 'DIV') {
-          overrideActive = false;
-          observer.disconnect();
-        }
-      });
-    }
-  });
-});
-
-function disableMollyguard() {
-  const textInput = document.getElementById('prompt-textarea');
-  const sendButton = textInput.nextElementSibling;
-  const parentDiv = textInput.parentElement;
-
-  sendButton.disabled = false;
-  parentDiv.classList.remove('forbidden-div');
-  parentDiv.classList.add('overridden');
-  mollyguardActive = false;
-}
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    const currentTime = new Date().getTime();
-
-    if (currentTime - lastEscapePressTime < 350) {
-      // Do nothing if molly-gaurd is not currently active
-      if (!mollyguardActive) return;
-
-      // Otherwise:
-      overrideActive = true;
-      disableMollyguard();
-      observer.observe(targetNode, config);
-    }
-
-    lastEscapePressTime = currentTime;
-  }
-});

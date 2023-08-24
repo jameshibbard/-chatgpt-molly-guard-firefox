@@ -11,7 +11,8 @@ browser.storage.local.get('words').then((data) => {
 
 saveBtn.addEventListener('click', () => {
   const rows = wordListTextArea.value.split('\n');
-  const words = rows.filter((item) => item !== '');
+  const words = rows.filter((item) => item !== '').map((str) => str.toLowerCase());
+
   browser.storage.local.set({ words });
   browser.runtime.sendMessage({ command: 'updateWords' });
   window.alert('Words saved!');
